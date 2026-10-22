@@ -1,7 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:vibration/vibration.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  await Supabase.initialize(
+    url: 'https://ftaiunqdviyzatvioppu.supabase.co',
+    anonKey: 'sb_publishable_GEf8hplzR0Rkb3kCPfJUlg_hJFTKeTK',
+  );
+
   runApp(const MyApp());
 }
 
@@ -11,7 +19,7 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'App Vibración',
+      title: 'SmowlCM Vibraciones',
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
         useMaterial3: true,
@@ -21,14 +29,59 @@ class MyApp extends StatelessWidget {
   }
 }
 
-class VibrationApp extends StatelessWidget {
+class VibrationApp extends StatefulWidget {
   const VibrationApp({super.key});
 
-  void _vibrate() async {
-    if (await Vibration.hasVibrator() ?? false) {
-      // Patrón de vibración que suena como un "buzz"
-      // [espera, vibración, espera, vibración, ...]
-      final pattern = [0, 100, 50, 100, 50, 100, 50, 100];
+  @override
+  State<VibrationApp> createState() => _VibrationAppState();
+}
+
+class _VibrationAppState extends State<VibrationApp> {
+  String _ultimaLetra = 'Ninguna';
+  String _estadoConexion = 'Conectando...';
+  DateTime? _ultimoTimestamp;
+
+  @override
+  void initState() {
+    super.initState();
+    _escucharVibraciones();
+  }
+
+  void _escucharVibraciones() {
+    Supabase.instance.client
+        .from('vibraciones')
+        .on(SupabaseEventTypes.insert, (payload) {
+      final data = payload.newRecord;
+      final letra = data['letra'] as String?;
+      final timestamp = data['timestamp'] as String?;
+
+      if (letra != null) {
+        setState(() {
+          _ultimaLetra = letra;
+          _ultimoTimestamp = DateTime.tryParse(timestamp ?? '');
+          _estadoConexion = 'Conectado';
+        });
+        _vibrarSegunLetra(letra);
+      }
+    }).subscribe();
+  }
+
+  void _vibrarSegunLetra(String letra) async {
+    final vibraciones = {'A': 1, 'B': 2, 'C': 3, 'D': 4};
+    final numVibraciones = vibraciones[letra.toUpperCase()] ?? 0;
+
+    if (await Vibration.hasVibrator() ?? false && numVibraciones > 0) {
+      // Patrón: [espera, vibración, espera, vibración, ...]
+      // Agregamos 500ms de separación para evitar que Android agrupe las vibraciones
+      final pattern = List<int>.filled(numVibraciones * 2 + 1, 0);
+      for (int i = 0; i < numVibraciones; i++) {
+        pattern[i * 2 + 1] = 250; // 250ms de vibración
+        if (i < numVibraciones - 1) {
+          pattern[i * 2 + 2] = 500; // 500ms de silencio entre vibraciones
+        }
+      }
+
+      // Usamos el patrón completo para evitar agrupación
       Vibration.vibrate(pattern: pattern);
     }
   }
@@ -38,19 +91,83 @@ class VibrationApp extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        title: const Text('App Vibración'),
+        title: const Text('SmowlCM Vibraciones'),
       ),
       body: Center(
-        child: ElevatedButton(
-          onPressed: _vibrate,
-          style: ElevatedButton.styleFrom(
-            padding: const EdgeInsets.all(30),
-            minimumSize: const Size(200, 200),
-          ),
-          child: const Text(
-            'VIBRAR',
-            style: TextStyle(fontSize: 30),
-          ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            // Estado de conexión
+            Container(
+              padding: const EdgeInsets.all(16),
+              margin: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: _estadoConexion == 'Conectado'
+                    ? Colors.green.withOpacity(0.2)
+                    : Colors.orange.withOpacity(0.2),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: _estadoConexion == 'Conectado'
+                      ? Colors.green
+                      : Colors.orange,
+                ),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    _estadoConexion == 'Conectado'
+                        ? Icons.wifi
+                        : Icons.wifi_off,
+                    color: _estadoConexion == 'Conectado'
+                        ? Colors.green
+                        : Colors.orange,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    _estadoConexion,
+                    style: const TextStyle(fontSize: 18),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 32),
+            // Última letra recibida
+            Text(
+              'Última letra:',
+              style: TextStyle(
+                fontSize: 20,
+                color: Colors.grey[600],
+              ),
+            ),
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(32),
+              decoration: BoxDecoration(
+                color: Colors.blue.withOpacity(0.1),
+                shape: BoxShape.circle,
+                border: Border.all(color: Colors.blue, width: 3),
+              ),
+              child: Text(
+                _ultimaLetra,
+                style: const TextStyle(
+                  fontSize: 64,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.blue,
+                ),
+              ),
+            ),
+            const SizedBox(height: 32),
+            // Timestamp
+            if (_ultimoTimestamp != null)
+              Text(
+                'Recibido: ${_ultimoTimestamp.toString().substring(0, 19)}',
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Colors.grey[500],
+                ),
+              ),
+          ],
         ),
       ),
     );
