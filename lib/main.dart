@@ -40,6 +40,7 @@ class _VibrationAppState extends State<VibrationApp> {
   String _ultimaLetra = 'Ninguna';
   String _estadoConexion = 'Conectando...';
   DateTime? _ultimoTimestamp;
+  RealtimeChannel? _channel;
 
   @override
   void initState() {
@@ -47,23 +48,35 @@ class _VibrationAppState extends State<VibrationApp> {
     _escucharVibraciones();
   }
 
-  void _escucharVibraciones() {
-    Supabase.instance.client
-        .from('vibraciones')
-        .on(SupabaseEventTypes.insert, (payload) {
-      final data = payload.newRecord;
-      final letra = data['letra'] as String?;
-      final timestamp = data['timestamp'] as String?;
+  @override
+  void dispose() {
+    _channel?.unsubscribe();
+    super.dispose();
+  }
 
-      if (letra != null) {
-        setState(() {
-          _ultimaLetra = letra;
-          _ultimoTimestamp = DateTime.tryParse(timestamp ?? '');
-          _estadoConexion = 'Conectado';
-        });
-        _vibrarSegunLetra(letra);
-      }
-    }).subscribe();
+  void _escucharVibraciones() {
+    _channel = Supabase.instance.client
+        .channel('vibraciones_channel')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.insert,
+          schema: 'public',
+          table: 'vibraciones',
+          callback: (payload) {
+            final data = payload.new;
+            final letra = data['letra'] as String?;
+            final timestamp = data['timestamp'] as String?;
+
+            if (letra != null) {
+              setState(() {
+                _ultimaLetra = letra;
+                _ultimoTimestamp = DateTime.tryParse(timestamp ?? '');
+                _estadoConexion = 'Conectado';
+              });
+              _vibrarSegunLetra(letra);
+            }
+          },
+        )
+        .subscribe();
   }
 
   void _vibrarSegunLetra(String letra) async {
