@@ -32,8 +32,11 @@ void main() async {
         NotificationButton(id: 'stop', text: 'Detener'),
       ],
     ),
+    iosNotificationOptions: const IOSNotificationOptions(
+      showNotification: true,
+      playSound: false,
+    ),
     foregroundTaskOptions: const ForegroundTaskOptions(
-      interval: 5000,
       isOnceEvent: false,
       autoRunOnBoot: false,
       allowWakeLock: true,
@@ -56,13 +59,14 @@ Future<void> _initializeNotifications() async {
 
   await notificationsPlugin.initialize(initializationSettings);
 
+  final vibrationPattern = Int64List.fromList([0, 250, 500, 250]);
   const AndroidNotificationChannel channel = AndroidNotificationChannel(
     'vibraciones_channel',
     'Vibraciones SmowlCM',
     description: 'Notificaciones de vibraciones',
     importance: Importance.high,
     enableVibration: true,
-    vibrationPattern: Int64List.fromList([0, 250, 500, 250]),
+    vibrationPattern: vibrationPattern,
   );
 
   await notificationsPlugin
@@ -316,7 +320,7 @@ class VibrationTaskHandler extends TaskHandler {
   RealtimeChannel? _channel;
 
   @override
-  Future<void> onStart(DateTime timestamp, SendPort? sendPort) async {
+  Future<void> onStart(DateTime timestamp) async {
     await Supabase.initialize(
       url: 'https://ftaiunqdviyzatvioppu.supabase.co',
       anonKey: 'sb_publishable_GEf8hplzR0Rkb3kCPfJUlg_hJFTKeTK',
@@ -326,12 +330,12 @@ class VibrationTaskHandler extends TaskHandler {
   }
 
   @override
-  Future<void> onRepeatEvent(DateTime timestamp, SendPort? sendPort) async {
-    // Evento periódico (cada 5 segundos)
+  Future<void> onRepeatEvent(DateTime timestamp) async {
+    // Evento periódico
   }
 
   @override
-  Future<void> onDestroy(DateTime timestamp, SendPort? sendPort) async {
+  Future<void> onDestroy(DateTime timestamp) async {
     _channel?.unsubscribe();
   }
 
