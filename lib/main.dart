@@ -149,10 +149,11 @@ class _VibrationAppState extends State<VibrationApp> {
 
   Int64List _generarPatronVibracion(int numVibraciones) {
     final pattern = <int>[];
+    pattern.add(0); // tiempo de espera inicial
     for (int i = 0; i < numVibraciones; i++) {
-      pattern.addAll([0, 250]); // espera, vibración
+      pattern.add(250); // duración de vibración
       if (i < numVibraciones - 1) {
-        pattern.addAll([500]); // silencio entre vibraciones
+        pattern.add(500); // silencio entre vibraciones
       }
     }
     return Int64List.fromList(pattern);
