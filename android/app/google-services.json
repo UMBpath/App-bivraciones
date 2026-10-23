@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "320018521485",
+    "project_id": "pathbivraciones",
+    "storage_bucket": "pathbivraciones.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:320018521485:android:83886a334518dc4e0671c4",
+        "android_client_info": {
+          "package_name": "com.example.mi_app_tareas"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBRTi78zWQUcKMJzVydRwaihDCRd8pvL8I"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
