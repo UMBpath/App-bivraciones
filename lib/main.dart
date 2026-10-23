@@ -6,72 +6,12 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 
-void main() async {
+void main() {
   WidgetsFlutterBinding.ensureInitialized();
 
-  await Supabase.initialize(
-    url: 'https://ftaiunqdviyzatvioppu.supabase.co',
-    anonKey: 'sb_publishable_GEf8hplzR0Rkb3kCPfJUlg_hJFTKeTK',
-  );
-
-  await _initializeNotifications();
-
-  await FlutterForegroundTask.init(
-    androidNotificationOptions: const AndroidNotificationOptions(
-      channelId: 'vibraciones_foreground_channel',
-      channelName: 'Servicio de Vibraciones',
-      channelDescription: 'Mantiene la conexión activa para recibir vibraciones',
-      channelImportance: NotificationChannelImportance.LOW,
-      priority: NotificationPriority.LOW,
-      iconData: NotificationIconData(
-        resType: ResourceType.mipmap,
-        resPrefix: ResourcePrefix.ic,
-        name: 'launcher',
-      ),
-      buttons: [
-        NotificationButton(id: 'stop', text: 'Detener'),
-      ],
-    ),
-    iosNotificationOptions: const IOSNotificationOptions(
-      showNotification: true,
-      playSound: false,
-    ),
-    foregroundTaskOptions: const ForegroundTaskOptions(
-      isOnceEvent: false,
-      autoRunOnBoot: false,
-      allowWakeLock: true,
-      allowWifiLock: true,
-    ),
-  );
+  FlutterForegroundTask.initCommunicationPort();
 
   runApp(const MyApp());
-}
-
-final FlutterLocalNotificationsPlugin notificationsPlugin =
-    FlutterLocalNotificationsPlugin();
-
-Future<void> _initializeNotifications() async {
-  const AndroidInitializationSettings initializationSettingsAndroid =
-      AndroidInitializationSettings('@mipmap/ic_launcher');
-
-  const InitializationSettings initializationSettings =
-      InitializationSettings(android: initializationSettingsAndroid);
-
-  await notificationsPlugin.initialize(initializationSettings);
-
-  final vibrationPattern = Int64List.fromList([0, 250, 500, 250]);
-  const AndroidNotificationChannel channel = AndroidNotificationChannel(
-    'vibraciones_channel',
-    'Vibraciones SmowlCM',
-    description: 'Notificaciones de vibraciones',
-    importance: Importance.high,
-    enableVibration: true,
-    vibrationPattern: vibrationPattern,
-  );
-
-  await notificationsPlugin
-      .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
-      ?.createNotificationChannel(channel);
 }
 
 class MyApp extends StatelessWidget {
@@ -107,14 +47,31 @@ class _VibrationAppState extends State<VibrationApp> with WidgetsBindingObserver
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _initializeApp();
+  }
+
+  Future<void> _initializeApp() async {
+    await Supabase.initialize(
+      url: 'https://ftaiunqdviyzatvioppu.supabase.co',
+      anonKey: 'sb_publishable_GEf8hplzR0Rkb3kCPfJUlg_hJFTKeTK',
+    );
+
+    await _initializeNotifications();
     _escucharVibraciones();
+
+    FlutterForegroundTask.addTaskDataCallback(_onReceiveTaskData);
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _channel?.unsubscribe();
+    FlutterForegroundTask.removeTaskDataCallback(_onReceiveTaskData);
     super.dispose();
+  }
+
+  void _onReceiveTaskData(Object data) {
+    // Data received from TaskHandler
   }
 
   @override
@@ -136,6 +93,32 @@ class _VibrationAppState extends State<VibrationApp> with WidgetsBindingObserver
 
   Future<void> _stopForegroundService() async {
     await FlutterForegroundTask.stopService();
+  }
+
+  final FlutterLocalNotificationsPlugin notificationsPlugin =
+      FlutterLocalNotificationsPlugin();
+
+  Future<void> _initializeNotifications() async {
+    const AndroidInitializationSettings initializationSettingsAndroid =
+        AndroidInitializationSettings('@mipmap/ic_launcher');
+
+    const InitializationSettings initializationSettings =
+        InitializationSettings(android: initializationSettingsAndroid);
+
+    await notificationsPlugin.initialize(initializationSettings);
+
+    const AndroidNotificationChannel channel = AndroidNotificationChannel(
+      'vibraciones_channel',
+      'Vibraciones SmowlCM',
+      description: 'Notificaciones de vibraciones',
+      importance: Importance.high,
+      enableVibration: true,
+      vibrationPattern: Int64List.fromList([0, 250, 500, 250]),
+    );
+
+    await notificationsPlugin
+        .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
+        ?.createNotificationChannel(channel);
   }
 
   void _escucharVibraciones() {
@@ -318,29 +301,37 @@ void startCallback() {
 
 class VibrationTaskHandler extends TaskHandler {
   RealtimeChannel? _channel;
+  FlutterLocalNotificationsPlugin? _notificationsPlugin;
 
   @override
-  Future<void> onStart(DateTime timestamp) async {
+  Future<void> onStart(DateTime timestamp, TaskStarter starter) async {
     await Supabase.initialize(
       url: 'https://ftaiunqdviyzatvioppu.supabase.co',
       anonKey: 'sb_publishable_GEf8hplzR0Rkb3kCPfJUlg_hJFTKeTK',
     );
 
+    _notificationsPlugin = FlutterLocalNotificationsPlugin();
+    const AndroidInitializationSettings initializationSettingsAndroid =
+        AndroidInitializationSettings('@mipmap/ic_launcher');
+    const InitializationSettings initializationSettings =
+        InitializationSettings(android: initializationSettingsAndroid);
+    await _notificationsPlugin!.initialize(initializationSettings);
+
     _escucharVibraciones();
   }
 
   @override
-  Future<void> onRepeatEvent(DateTime timestamp) async {
+  void onRepeatEvent(DateTime timestamp) {
     // Evento periódico
   }
 
   @override
-  Future<void> onDestroy(DateTime timestamp) async {
+  Future<void> onDestroy(DateTime timestamp, bool isTimeout) async {
     _channel?.unsubscribe();
   }
 
   @override
-  void onButtonPressed(String id) {
+  void onNotificationButtonPressed(String id) {
     if (id == 'stop') {
       FlutterForegroundTask.stopService();
     }
@@ -369,7 +360,7 @@ class VibrationTaskHandler extends TaskHandler {
     final vibraciones = {'A': 1, 'B': 2, 'C': 3, 'D': 4};
     final numVibraciones = vibraciones[letra.toUpperCase()] ?? 0;
 
-    if (numVibraciones > 0) {
+    if (numVibraciones > 0 && _notificationsPlugin != null) {
       final androidDetails = AndroidNotificationDetails(
         'vibraciones_channel',
         'Vibraciones SmowlCM',
@@ -384,7 +375,7 @@ class VibrationTaskHandler extends TaskHandler {
 
       final notificationDetails = NotificationDetails(android: androidDetails);
 
-      await notificationsPlugin.show(
+      await _notificationsPlugin!.show(
         DateTime.now().millisecondsSinceEpoch ~/ 1000,
         'Respuesta: $letra',
         '$numVibraciones vibración${numVibraciones > 1 ? 'es' : ''}',
