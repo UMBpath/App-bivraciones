@@ -62,7 +62,7 @@ class _VibrationAppState extends State<VibrationApp> {
           schema: 'public',
           table: 'vibraciones',
           callback: (payload) {
-            final data = payload.new;
+            final data = payload.newRecord;
             final letra = data['letra'] as String?;
             final timestamp = data['timestamp'] as String?;
 
