@@ -51,7 +51,7 @@ Future<void> _initializeNotifications() async {
 }
 
 Future<void> _setupFirebaseMessaging() async {
-  FirebaseMessaging messaging = FirebaseMessaging.instance();
+  FirebaseMessaging messaging = FirebaseMessaging.instance;
 
   NotificationSettings settings = await messaging.requestPermission(
     alert: true,
@@ -190,8 +190,7 @@ class _VibrationAppState extends State<VibrationApp> {
   }
 
   Future<void> _getFCMToken() async {
-    FirebaseMessaging messaging = FirebaseMessaging.instance;
-    final token = await messaging.getToken();
+    final token = await FirebaseMessaging.instance.getToken();
     setState(() {
       _fcmToken = token;
       _estadoConexion = token != null ? 'FCM Token obtenido' : 'Error FCM';
