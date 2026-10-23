@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:vibration/vibration.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -145,7 +147,7 @@ class _VibrationAppState extends State<VibrationApp> {
     }
   }
 
-  List<int> _generarPatronVibracion(int numVibraciones) {
+  Int64List _generarPatronVibracion(int numVibraciones) {
     final pattern = <int>[];
     for (int i = 0; i < numVibraciones; i++) {
       pattern.addAll([0, 250]); // espera, vibración
@@ -153,7 +155,7 @@ class _VibrationAppState extends State<VibrationApp> {
         pattern.addAll([500]); // silencio entre vibraciones
       }
     }
-    return pattern;
+    return Int64List.fromList(pattern);
   }
 
   @override
