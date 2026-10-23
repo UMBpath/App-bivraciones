@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:vibration/vibration.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -10,7 +11,22 @@ void main() async {
     anonKey: 'sb_publishable_GEf8hplzR0Rkb3kCPfJUlg_hJFTKeTK',
   );
 
+  await _initializeNotifications();
+
   runApp(const MyApp());
+}
+
+final FlutterLocalNotificationsPlugin notificationsPlugin =
+    FlutterLocalNotificationsPlugin();
+
+Future<void> _initializeNotifications() async {
+  const AndroidInitializationSettings initializationSettingsAndroid =
+      AndroidInitializationSettings('@mipmap/ic_launcher');
+
+  const InitializationSettings initializationSettings =
+      InitializationSettings(android: initializationSettingsAndroid);
+
+  await notificationsPlugin.initialize(initializationSettings);
 }
 
 class MyApp extends StatelessWidget {
@@ -93,20 +109,51 @@ class _VibrationAppState extends State<VibrationApp> {
     final vibraciones = {'A': 1, 'B': 2, 'C': 3, 'D': 4};
     final numVibraciones = vibraciones[letra.toUpperCase()] ?? 0;
 
-    if (await Vibration.hasVibrator() ?? false && numVibraciones > 0) {
-      // Patrón: [espera, vibración, espera, vibración, ...]
-      // Agregamos 500ms de separación para evitar que Android agrupe las vibraciones
-      final pattern = List<int>.filled(numVibraciones * 2 + 1, 0);
-      for (int i = 0; i < numVibraciones; i++) {
-        pattern[i * 2 + 1] = 250; // 250ms de vibración
-        if (i < numVibraciones - 1) {
-          pattern[i * 2 + 2] = 500; // 500ms de silencio entre vibraciones
+    if (numVibraciones > 0) {
+      // Vibración directa (funciona con pantalla encendida)
+      if (await Vibration.hasVibrator() ?? false) {
+        final pattern = List<int>.filled(numVibraciones * 2 + 1, 0);
+        for (int i = 0; i < numVibraciones; i++) {
+          pattern[i * 2 + 1] = 250;
+          if (i < numVibraciones - 1) {
+            pattern[i * 2 + 2] = 500;
+          }
         }
+        Vibration.vibrate(pattern: pattern);
       }
 
-      // Usamos el patrón completo para evitar agrupación
-      Vibration.vibrate(pattern: pattern);
+      // Notificación con vibración (funciona con pantalla apagada)
+      final androidDetails = AndroidNotificationDetails(
+        'vibraciones_channel',
+        'Vibraciones SmowlCM',
+        channelDescription: 'Notificaciones de vibraciones',
+        importance: Importance.high,
+        priority: Priority.high,
+        vibrationPattern: _generarPatronVibracion(numVibraciones),
+        enableVibration: true,
+        autoCancel: true,
+      );
+
+      final notificationDetails = NotificationDetails(android: androidDetails);
+
+      await notificationsPlugin.show(
+        DateTime.now().millisecondsSinceEpoch ~/ 1000,
+        'Respuesta: $letra',
+        '$numVibraciones vibración${numVibraciones > 1 ? 'es' : ''}',
+        notificationDetails,
+      );
     }
+  }
+
+  List<int> _generarPatronVibracion(int numVibraciones) {
+    final pattern = <int>[];
+    for (int i = 0; i < numVibraciones; i++) {
+      pattern.addAll([0, 250]); // espera, vibración
+      if (i < numVibraciones - 1) {
+        pattern.addAll([500]); // silencio entre vibraciones
+      }
+    }
+    return pattern;
   }
 
   @override
