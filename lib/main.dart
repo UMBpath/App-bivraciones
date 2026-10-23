@@ -212,9 +212,25 @@ class _VibrationAppState extends State<VibrationApp> {
       if (token == null) {
         throw Exception('No se pudo obtener FCM Token');
       }
+
+      // Guardar token en Supabase
+      await _saveFCMTokenToSupabase(token);
     } catch (e) {
       print('Error obteniendo FCM Token: $e');
       rethrow;
+    }
+  }
+
+  Future<void> _saveFCMTokenToSupabase(String token) async {
+    try {
+      await Supabase.instance.client.from('fcm_tokens').upsert({
+        'token': token,
+        'updated_at': DateTime.now().toIso8601String(),
+      });
+      print('FCM Token guardado en Supabase');
+    } catch (e) {
+      print('Error guardando FCM Token: $e');
+      // No lanzar error, es solo guardar el token
     }
   }
 
