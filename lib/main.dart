@@ -1,151 +1,63 @@
-import 'dart:typed_data';
-
-import 'package:flutter/material.dart';
-import 'package:vibration/vibration.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_foreground_task/flutter_foreground_task.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
-void main() async {
+import 'app_config.dart';
+import 'foreground_service.dart';
+import 'vibration_alerts.dart';
+
+@pragma('vm:entry-point')
+Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   WidgetsFlutterBinding.ensureInitialized();
+  if (Firebase.apps.isEmpty) {
+    await Firebase.initializeApp();
+  }
+  await inicializarNotificaciones();
+  await _manejarMensajeFcm(message);
+}
+
+Future<void> _manejarMensajeFcm(RemoteMessage message) async {
+  final letra = message.data['letra'] as String?;
+  if (letra != null) {
+    await reproducirAlertaLetra(letra);
+  }
+}
+
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  FlutterForegroundTask.initCommunicationPort();
 
   await Firebase.initializeApp();
+  FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
 
   await Supabase.initialize(
-    url: 'https://ftaiunqdviyzatvioppu.supabase.co',
-    anonKey: 'sb_publishable_GEf8hplzR0Rkb3kCPfJUlg_hJFTKeTK',
+    url: supabaseUrl,
+    publishableKey: supabasePublishableKey,
   );
 
-  await _initializeNotifications();
+  await inicializarNotificaciones();
   await _setupFirebaseMessaging();
 
   runApp(const MyApp());
 }
 
-final FlutterLocalNotificationsPlugin notificationsPlugin =
-    FlutterLocalNotificationsPlugin();
-
-Future<void> _initializeNotifications() async {
-  const AndroidInitializationSettings initializationSettingsAndroid =
-      AndroidInitializationSettings('@mipmap/ic_launcher');
-
-  const InitializationSettings initializationSettings =
-      InitializationSettings(android: initializationSettingsAndroid);
-
-  await notificationsPlugin.initialize(initializationSettings);
-
-  final vibrationPattern = Int64List.fromList([0, 250, 500, 250]);
-  final AndroidNotificationChannel channel = AndroidNotificationChannel(
-    'vibraciones_channel',
-    'Vibraciones SmowlCM',
-    description: 'Notificaciones de vibraciones',
-    importance: Importance.high,
-    enableVibration: true,
-    vibrationPattern: vibrationPattern,
-  );
-
-  await notificationsPlugin
-      .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
-      ?.createNotificationChannel(channel);
-}
-
 Future<void> _setupFirebaseMessaging() async {
-  FirebaseMessaging messaging = FirebaseMessaging.instance;
-
-  NotificationSettings settings = await messaging.requestPermission(
+  final messaging = FirebaseMessaging.instance;
+  await messaging.requestPermission(
     alert: true,
-    announcement: false,
     badge: true,
-    carPlay: false,
-    criticalAlert: false,
-    provisional: false,
+    sound: true,
+  );
+  await messaging.setForegroundNotificationPresentationOptions(
+    alert: true,
+    badge: true,
     sound: true,
   );
 
-  if (settings.authorizationStatus == AuthorizationStatus.authorized) {
-    print('Permiso de notificaciones concedido');
-  } else {
-    print('Permiso de notificaciones denegado');
-  }
-
-  FirebaseMessaging.onMessage.listen((RemoteMessage message) {
-    print('Mensaje recibido en foreground: ${message.notification?.title}');
-    _handleMessage(message);
-  });
-
-  FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
-    print('Mensaje abierto desde background: ${message.notification?.title}');
-    _handleMessage(message);
-  });
-
-  FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
-}
-
-Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
-  await Firebase.initializeApp();
-  print('Mensaje recibido en background: ${message.notification?.title}');
-  _handleMessage(message);
-}
-
-void _handleMessage(RemoteMessage message) {
-  final data = message.data;
-  final letra = data['letra'] as String?;
-
-  if (letra != null) {
-    _vibrarSegunLetra(letra);
-  }
-}
-
-void _vibrarSegunLetra(String letra) async {
-  final vibraciones = {'A': 1, 'B': 2, 'C': 3, 'D': 4};
-  final numVibraciones = vibraciones[letra.toUpperCase()] ?? 0;
-
-  if (numVibraciones > 0) {
-    if (await Vibration.hasVibrator() ?? false) {
-      final pattern = List<int>.filled(numVibraciones * 2 + 1, 0);
-      for (int i = 0; i < numVibraciones; i++) {
-        pattern[i * 2 + 1] = 250;
-        if (i < numVibraciones - 1) {
-          pattern[i * 2 + 2] = 500;
-        }
-      }
-      Vibration.vibrate(pattern: pattern);
-    }
-
-    final androidDetails = AndroidNotificationDetails(
-      'vibraciones_channel',
-      'Vibraciones SmowlCM',
-      channelDescription: 'Notificaciones de vibraciones',
-      importance: Importance.high,
-      priority: Priority.high,
-      vibrationPattern: _generarPatronVibracion(numVibraciones),
-      enableVibration: true,
-      autoCancel: true,
-      styleInformation: BigTextStyleInformation(''),
-    );
-
-    final notificationDetails = NotificationDetails(android: androidDetails);
-
-    await notificationsPlugin.show(
-      DateTime.now().millisecondsSinceEpoch ~/ 1000,
-      'Respuesta: $letra',
-      '$numVibraciones vibración${numVibraciones > 1 ? 'es' : ''}',
-      notificationDetails,
-    );
-  }
-}
-
-Int64List _generarPatronVibracion(int numVibraciones) {
-  final pattern = <int>[];
-  pattern.add(0);
-  for (int i = 0; i < numVibraciones; i++) {
-    pattern.add(250);
-    if (i < numVibraciones - 1) {
-      pattern.add(500);
-    }
-  }
-  return Int64List.fromList(pattern);
+  FirebaseMessaging.onMessage.listen(_manejarMensajeFcm);
+  FirebaseMessaging.onMessageOpenedApp.listen(_manejarMensajeFcm);
 }
 
 class MyApp extends StatelessWidget {
@@ -177,28 +89,68 @@ class _VibrationAppState extends State<VibrationApp> {
   DateTime? _ultimoTimestamp;
   String? _fcmToken;
   RealtimeChannel? _channel;
+  bool _servicioActivo = false;
 
   @override
   void initState() {
     super.initState();
-    _initializeApp();
+    FlutterForegroundTask.addTaskDataCallback(_onReceiveTaskData);
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      inicializarServicioPrimerPlano();
+      await pedirPermisosSegundoPlano();
+      await _initializeApp();
+    });
+  }
+
+  @override
+  void dispose() {
+    FlutterForegroundTask.removeTaskDataCallback(_onReceiveTaskData);
+    _channel?.unsubscribe();
+    super.dispose();
+  }
+
+  void _onReceiveTaskData(Object data) {
+    if (data is! Map) {
+      return;
+    }
+    final tipo = data['tipo'];
+    if (tipo == 'letra') {
+      setState(() {
+        _ultimaLetra = (data['letra'] as String?) ?? _ultimaLetra;
+        _ultimoTimestamp = DateTime.tryParse('${data['timestamp'] ?? ''}');
+        _estadoConexion = 'Servicio activo (pantalla apagada)';
+        _servicioActivo = true;
+      });
+    } else if (tipo == 'estado') {
+      setState(() {
+        _estadoConexion = '${data['mensaje'] ?? _estadoConexion}';
+      });
+    }
   }
 
   Future<void> _initializeApp() async {
     setState(() {
-      _estadoConexion = 'Iniciando Firebase...';
+      _estadoConexion = 'Iniciando...';
     });
 
     try {
       await _getFCMToken();
+      await iniciarServicioPrimerPlano();
+      final running = await FlutterForegroundTask.isRunningService;
       setState(() {
-        _estadoConexion = 'FCM listo, conectando Supabase...';
+        _servicioActivo = running;
+        _estadoConexion = running
+            ? 'Servicio activo (pantalla apagada)'
+            : 'FCM listo, conectando Supabase...';
       });
-      _escucharVibraciones();
+      if (!running) {
+        _escucharVibracionesEnPantalla();
+      }
     } catch (e) {
       setState(() {
         _estadoConexion = 'Error: $e';
       });
+      _escucharVibracionesEnPantalla();
     }
   }
 
@@ -208,15 +160,11 @@ class _VibrationAppState extends State<VibrationApp> {
       setState(() {
         _fcmToken = token;
       });
-      print('FCM Token: $token');
       if (token == null) {
         throw Exception('No se pudo obtener FCM Token');
       }
-
-      // Guardar token en Supabase
       await _saveFCMTokenToSupabase(token);
     } catch (e) {
-      print('Error obteniendo FCM Token: $e');
       rethrow;
     }
   }
@@ -227,20 +175,12 @@ class _VibrationAppState extends State<VibrationApp> {
         'token': token,
         'updated_at': DateTime.now().toIso8601String(),
       });
-      print('FCM Token guardado en Supabase');
     } catch (e) {
-      print('Error guardando FCM Token: $e');
-      // No lanzar error, es solo guardar el token
+      debugPrint('Error guardando FCM Token: $e');
     }
   }
 
-  @override
-  void dispose() {
-    _channel?.unsubscribe();
-    super.dispose();
-  }
-
-  void _escucharVibraciones() {
+  void _escucharVibracionesEnPantalla() {
     try {
       _channel = Supabase.instance.client
           .channel('vibraciones_channel')
@@ -257,16 +197,16 @@ class _VibrationAppState extends State<VibrationApp> {
                 setState(() {
                   _ultimaLetra = letra;
                   _ultimoTimestamp = DateTime.tryParse(timestamp ?? '');
-                  _estadoConexion = 'Conectado (Supabase)';
+                  _estadoConexion = 'Conectado (app abierta)';
                 });
-                _vibrarSegunLetra(letra);
+                reproducirAlertaLetra(letra);
               }
             },
           )
           .subscribe((status, error) {
             if (status == RealtimeSubscribeStatus.subscribed) {
               setState(() {
-                _estadoConexion = 'Conectado (Supabase)';
+                _estadoConexion = 'Conectado (app abierta)';
               });
             } else if (error != null) {
               setState(() {
@@ -281,99 +221,140 @@ class _VibrationAppState extends State<VibrationApp> {
     }
   }
 
+  Future<void> _alternarServicio(bool activo) async {
+    if (activo) {
+      await pedirPermisosSegundoPlano();
+      await iniciarServicioPrimerPlano();
+      await _channel?.unsubscribe();
+      _channel = null;
+      setState(() {
+        _servicioActivo = true;
+        _estadoConexion = 'Servicio activo (pantalla apagada)';
+      });
+    } else {
+      await detenerServicioPrimerPlano();
+      setState(() {
+        _servicioActivo = false;
+      });
+      _escucharVibracionesEnPantalla();
+    }
+  }
+
+  bool get _conectado {
+    return _estadoConexion.toLowerCase().contains('activo') ||
+        _estadoConexion.toLowerCase().contains('conectado');
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        title: const Text('SmowlCM Vibraciones'),
-      ),
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(16),
-              margin: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: _estadoConexion == 'Conectado' || _estadoConexion == 'FCM Token obtenido'
-                    ? Colors.green.withOpacity(0.2)
-                    : Colors.orange.withOpacity(0.2),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: _estadoConexion == 'Conectado' || _estadoConexion == 'FCM Token obtenido'
-                      ? Colors.green
-                      : Colors.orange,
+    return WithForegroundTask(
+      child: Scaffold(
+        appBar: AppBar(
+          backgroundColor: Theme.of(context).colorScheme.inversePrimary,
+          title: const Text('SmowlCM Vibraciones'),
+        ),
+        body: Center(
+          child: ListView(
+            padding: const EdgeInsets.all(16),
+            shrinkWrap: true,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: _conectado
+                      ? Colors.green.withOpacity(0.2)
+                      : Colors.orange.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: _conectado ? Colors.green : Colors.orange,
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      _conectado ? Icons.wifi : Icons.wifi_off,
+                      color: _conectado ? Colors.green : Colors.orange,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        _estadoConexion,
+                        style: const TextStyle(fontSize: 18),
+                      ),
+                    ),
+                  ],
                 ),
               ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    _estadoConexion == 'Conectado' || _estadoConexion == 'FCM Token obtenido'
-                        ? Icons.wifi
-                        : Icons.wifi_off,
-                    color: _estadoConexion == 'Conectado' || _estadoConexion == 'FCM Token obtenido'
-                        ? Colors.green
-                        : Colors.orange,
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    _estadoConexion,
-                    style: const TextStyle(fontSize: 18),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 32),
-            Text(
-              'Última letra:',
-              style: TextStyle(
-                fontSize: 20,
-                color: Colors.grey[600],
-              ),
-            ),
-            const SizedBox(height: 16),
-            Container(
-              padding: const EdgeInsets.all(32),
-              decoration: BoxDecoration(
-                color: Colors.blue.withOpacity(0.1),
-                shape: BoxShape.circle,
-                border: Border.all(color: Colors.blue, width: 3),
-              ),
-              child: Text(
-                _ultimaLetra,
-                style: const TextStyle(
-                  fontSize: 64,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.blue,
+              const SizedBox(height: 16),
+              SwitchListTile(
+                value: _servicioActivo,
+                title: const Text('Mantener activo con pantalla apagada'),
+                subtitle: const Text(
+                  'Debe quedar una notificación fija. No cierres la app desde recientes.',
                 ),
+                onChanged: _alternarServicio,
               ),
-            ),
-            const SizedBox(height: 32),
-            if (_ultimoTimestamp != null)
+              const SizedBox(height: 8),
               Text(
-                'Recibido: ${_ultimoTimestamp.toString().substring(0, 19)}',
+                'Si apagas el celular por completo, ninguna app puede vibrar. '
+                'Bloquéalo y deja la pantalla apagada con el interruptor activado.',
+                style: TextStyle(fontSize: 13, color: Colors.grey[700]),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 32),
+              Text(
+                'Última letra:',
+                textAlign: TextAlign.center,
                 style: TextStyle(
-                  fontSize: 14,
-                  color: Colors.grey[500],
+                  fontSize: 20,
+                  color: Colors.grey[600],
                 ),
               ),
-            const SizedBox(height: 16),
-            if (_fcmToken != null)
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Text(
+              const SizedBox(height: 16),
+              Center(
+                child: Container(
+                  padding: const EdgeInsets.all(32),
+                  decoration: BoxDecoration(
+                    color: Colors.blue.withOpacity(0.1),
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.blue, width: 3),
+                  ),
+                  child: Text(
+                    _ultimaLetra,
+                    style: const TextStyle(
+                      fontSize: 64,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.blue,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 32),
+              if (_ultimoTimestamp != null)
+                Text(
+                  'Recibido: ${_ultimoTimestamp.toString().substring(0, 19)}',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Colors.grey[500],
+                  ),
+                ),
+              const SizedBox(height: 16),
+              if (_fcmToken != null)
+                Text(
                   'FCM Token: ${_fcmToken!.substring(0, 20)}...',
+                  textAlign: TextAlign.center,
                   style: TextStyle(
                     fontSize: 12,
                     color: Colors.grey[400],
                   ),
                 ),
-              ),
-          ],
+            ],
+          ),
         ),
       ),
     );
   }
 }
+
+
