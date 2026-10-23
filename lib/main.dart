@@ -83,7 +83,7 @@ class _VibrationAppState extends State<VibrationApp> {
             });
           } else if (error != null) {
             setState(() {
-              _estadoConexion = 'Error: ${error.message}';
+              _estadoConexion = 'Error: $error';
             });
           }
         });
