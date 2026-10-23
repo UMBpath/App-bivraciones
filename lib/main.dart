@@ -185,17 +185,37 @@ class _VibrationAppState extends State<VibrationApp> {
   }
 
   Future<void> _initializeApp() async {
-    await _getFCMToken();
-    _escucharVibraciones();
+    setState(() {
+      _estadoConexion = 'Iniciando Firebase...';
+    });
+
+    try {
+      await _getFCMToken();
+      setState(() {
+        _estadoConexion = 'FCM listo, conectando Supabase...';
+      });
+      _escucharVibraciones();
+    } catch (e) {
+      setState(() {
+        _estadoConexion = 'Error: $e';
+      });
+    }
   }
 
   Future<void> _getFCMToken() async {
-    final token = await FirebaseMessaging.instance.getToken();
-    setState(() {
-      _fcmToken = token;
-      _estadoConexion = token != null ? 'FCM Token obtenido' : 'Error FCM';
-    });
-    print('FCM Token: $token');
+    try {
+      final token = await FirebaseMessaging.instance.getToken();
+      setState(() {
+        _fcmToken = token;
+      });
+      print('FCM Token: $token');
+      if (token == null) {
+        throw Exception('No se pudo obtener FCM Token');
+      }
+    } catch (e) {
+      print('Error obteniendo FCM Token: $e');
+      rethrow;
+    }
   }
 
   @override
@@ -205,38 +225,44 @@ class _VibrationAppState extends State<VibrationApp> {
   }
 
   void _escucharVibraciones() {
-    _channel = Supabase.instance.client
-        .channel('vibraciones_channel')
-        .onPostgresChanges(
-          event: PostgresChangeEvent.insert,
-          schema: 'public',
-          table: 'vibraciones',
-          callback: (payload) {
-            final data = payload.newRecord;
-            final letra = data['letra'] as String?;
-            final timestamp = data['timestamp'] as String?;
+    try {
+      _channel = Supabase.instance.client
+          .channel('vibraciones_channel')
+          .onPostgresChanges(
+            event: PostgresChangeEvent.insert,
+            schema: 'public',
+            table: 'vibraciones',
+            callback: (payload) {
+              final data = payload.newRecord;
+              final letra = data['letra'] as String?;
+              final timestamp = data['timestamp'] as String?;
 
-            if (letra != null) {
+              if (letra != null) {
+                setState(() {
+                  _ultimaLetra = letra;
+                  _ultimoTimestamp = DateTime.tryParse(timestamp ?? '');
+                  _estadoConexion = 'Conectado (Supabase)';
+                });
+                _vibrarSegunLetra(letra);
+              }
+            },
+          )
+          .subscribe((status, error) {
+            if (status == RealtimeSubscribeStatus.subscribed) {
               setState(() {
-                _ultimaLetra = letra;
-                _ultimoTimestamp = DateTime.tryParse(timestamp ?? '');
-                _estadoConexion = 'Conectado';
+                _estadoConexion = 'Conectado (Supabase)';
               });
-              _vibrarSegunLetra(letra);
+            } else if (error != null) {
+              setState(() {
+                _estadoConexion = 'Error Supabase: $error';
+              });
             }
-          },
-        )
-        .subscribe((status, error) {
-          if (status == RealtimeSubscribeStatus.subscribed) {
-            setState(() {
-              _estadoConexion = 'Conectado';
-            });
-          } else if (error != null) {
-            setState(() {
-              _estadoConexion = 'Error: $error';
-            });
-          }
-        });
+          });
+    } catch (e) {
+      setState(() {
+        _estadoConexion = 'Error al conectar: $e';
+      });
+    }
   }
 
   @override
