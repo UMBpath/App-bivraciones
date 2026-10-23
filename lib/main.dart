@@ -107,13 +107,14 @@ class _VibrationAppState extends State<VibrationApp> with WidgetsBindingObserver
 
     await notificationsPlugin.initialize(initializationSettings);
 
-    const AndroidNotificationChannel channel = AndroidNotificationChannel(
+    final vibrationPattern = Int64List.fromList([0, 250, 500, 250]);
+    final AndroidNotificationChannel channel = AndroidNotificationChannel(
       'vibraciones_channel',
       'Vibraciones SmowlCM',
       description: 'Notificaciones de vibraciones',
       importance: Importance.high,
       enableVibration: true,
-      vibrationPattern: Int64List.fromList([0, 250, 500, 250]),
+      vibrationPattern: vibrationPattern,
     );
 
     await notificationsPlugin
@@ -311,9 +312,9 @@ class VibrationTaskHandler extends TaskHandler {
     );
 
     _notificationsPlugin = FlutterLocalNotificationsPlugin();
-    const AndroidInitializationSettings initializationSettingsAndroid =
+    final AndroidInitializationSettings initializationSettingsAndroid =
         AndroidInitializationSettings('@mipmap/ic_launcher');
-    const InitializationSettings initializationSettings =
+    final InitializationSettings initializationSettings =
         InitializationSettings(android: initializationSettingsAndroid);
     await _notificationsPlugin!.initialize(initializationSettings);
 
