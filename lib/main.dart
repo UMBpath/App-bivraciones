@@ -29,6 +29,20 @@ Future<void> _initializeNotifications() async {
       InitializationSettings(android: initializationSettingsAndroid);
 
   await notificationsPlugin.initialize(initializationSettings);
+
+  // Crear canal de notificaciones con vibración habilitada
+  const AndroidNotificationChannel channel = AndroidNotificationChannel(
+    'vibraciones_channel',
+    'Vibraciones SmowlCM',
+    description: 'Notificaciones de vibraciones',
+    importance: Importance.high,
+    enableVibration: true,
+    vibrationPattern: Int64List.fromList([0, 250, 500, 250]),
+  );
+
+  await notificationsPlugin
+      .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
+      ?.createNotificationChannel(channel);
 }
 
 class MyApp extends StatelessWidget {
@@ -134,6 +148,7 @@ class _VibrationAppState extends State<VibrationApp> {
         vibrationPattern: _generarPatronVibracion(numVibraciones),
         enableVibration: true,
         autoCancel: true,
+        styleInformation: BigTextStyleInformation(''),
       );
 
       final notificationDetails = NotificationDetails(android: androidDetails);
