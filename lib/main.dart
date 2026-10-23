@@ -76,7 +76,17 @@ class _VibrationAppState extends State<VibrationApp> {
             }
           },
         )
-        .subscribe();
+        .subscribe((status, error) {
+          if (status == RealtimeSubscribeStatus.subscribed) {
+            setState(() {
+              _estadoConexion = 'Conectado';
+            });
+          } else if (error != null) {
+            setState(() {
+              _estadoConexion = 'Error: ${error.message}';
+            });
+          }
+        });
   }
 
   void _vibrarSegunLetra(String letra) async {
